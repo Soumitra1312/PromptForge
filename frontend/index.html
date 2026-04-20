@@ -1,0 +1,731 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Prompt Processing System</title>
+  <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Mono:ital,wght@0,400;0,500;1,400&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg-1: #0a0a0f;
+      --bg-2: #11111c;
+      --surface: rgba(255,255,255,0.04);
+      --surface-hover: rgba(255,255,255,0.07);
+      --border: rgba(255,255,255,0.08);
+      --border-glow: rgba(99,179,237,0.3);
+      --text-primary: #f0f0ff;
+      --text-secondary: rgba(240,240,255,0.5);
+      --accent: #63b3ed;
+      --accent-2: #9f7aea;
+      --accent-3: #68d391;
+      --danger: #fc8181;
+      --glow-1: rgba(99,179,237,0.15);
+      --glow-2: rgba(159,122,234,0.12);
+      --glow-3: rgba(104,211,145,0.1);
+      --shadow: 0 8px 32px rgba(0,0,0,0.4);
+      --radius: 16px;
+      --transition: 0.3s cubic-bezier(0.4,0,0.2,1);
+    }
+
+    [data-theme="light"] {
+      --bg-1: #eef2ff;
+      --bg-2: #e8edff;
+      --surface: rgba(255,255,255,0.7);
+      --surface-hover: rgba(255,255,255,0.9);
+      --border: rgba(99,122,210,0.15);
+      --border-glow: rgba(99,122,210,0.4);
+      --text-primary: #1a1a3e;
+      --text-secondary: rgba(26,26,62,0.5);
+      --accent: #4361ee;
+      --accent-2: #7209b7;
+      --accent-3: #06a77d;
+      --danger: #e63946;
+      --glow-1: rgba(67,97,238,0.12);
+      --glow-2: rgba(114,9,183,0.08);
+      --glow-3: rgba(6,167,125,0.08);
+      --shadow: 0 8px 32px rgba(67,97,238,0.12);
+    }
+
+    body {
+      font-family: 'Syne', sans-serif;
+      background: var(--bg-1);
+      color: var(--text-primary);
+      min-height: 100vh;
+      overflow-x: hidden;
+      transition: background var(--transition), color var(--transition);
+    }
+
+    /* ── Animated background ── */
+    .bg-canvas {
+      position: fixed;
+      inset: 0;
+      z-index: 0;
+      overflow: hidden;
+      pointer-events: none;
+    }
+
+    .orb {
+      position: absolute;
+      border-radius: 50%;
+      filter: blur(80px);
+      opacity: 0.6;
+      animation: drift 18s ease-in-out infinite alternate;
+    }
+
+    .orb-1 {
+      width: 500px; height: 500px;
+      background: radial-gradient(circle, var(--glow-1), transparent 70%);
+      top: -100px; left: -100px;
+      animation-duration: 20s;
+    }
+
+    .orb-2 {
+      width: 400px; height: 400px;
+      background: radial-gradient(circle, var(--glow-2), transparent 70%);
+      bottom: -80px; right: -80px;
+      animation-duration: 25s;
+      animation-direction: alternate-reverse;
+    }
+
+    .orb-3 {
+      width: 300px; height: 300px;
+      background: radial-gradient(circle, var(--glow-3), transparent 70%);
+      top: 50%; left: 60%;
+      animation-duration: 15s;
+    }
+
+    [data-theme="light"] .orb { opacity: 0.8; }
+
+    @keyframes drift {
+      0%   { transform: translate(0, 0) scale(1); }
+      33%  { transform: translate(40px, -30px) scale(1.05); }
+      66%  { transform: translate(-20px, 40px) scale(0.97); }
+      100% { transform: translate(30px, 20px) scale(1.03); }
+    }
+
+    /* Grid texture */
+    .bg-grid {
+      position: fixed;
+      inset: 0;
+      z-index: 0;
+      pointer-events: none;
+      background-image:
+        linear-gradient(var(--border) 1px, transparent 1px),
+        linear-gradient(90deg, var(--border) 1px, transparent 1px);
+      background-size: 40px 40px;
+      opacity: 0.4;
+      transition: opacity var(--transition);
+    }
+
+    /* ── Layout ── */
+    .page {
+      position: relative;
+      z-index: 1;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 32px 16px 64px;
+    }
+
+    /* ── Header ── */
+    header {
+      width: 100%;
+      max-width: 640px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 48px;
+      animation: slideDown 0.6s cubic-bezier(0.4,0,0.2,1) both;
+      gap: 32px;
+    }
+
+    @keyframes slideDown {
+      from { opacity: 0; transform: translateY(-20px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
+    .logo {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+
+    .logo-tag {
+      font-family: 'DM Mono', monospace;
+      font-size: 10px;
+      letter-spacing: 3px;
+      text-transform: uppercase;
+      color: var(--accent);
+      opacity: 0.8;
+    }
+
+    .logo-title {
+      font-size: 30px;
+      font-weight: 1000;
+      letter-spacing: -0.5px;
+      background: linear-gradient(135deg, var(--accent), var(--accent-2));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      white-space: nowrap;
+      overflow-x: auto;
+      text-overflow: ellipsis;
+      display: block;
+    }
+
+    /* Theme toggle */
+    .theme-toggle {
+      position: relative;
+      width: 52px;
+      height: 28px;
+      cursor: pointer;
+      flex-shrink: 0;
+      margin-left: 24px;
+      box-shadow: 0 2px 12px var(--glow-1), 0 0 0 2px var(--border-glow);
+      border-radius: 16px;
+      background: var(--surface);
+      transition: box-shadow var(--transition), background var(--transition);
+    }
+
+    .theme-toggle input { display: none; }
+
+    .toggle-track {
+      display: block;
+      width: 100%;
+      height: 100%;
+      border-radius: 14px;
+      background: var(--surface);
+      border: 1.5px solid var(--border-glow);
+      transition: background var(--transition), border-color var(--transition);
+      position: relative;
+      overflow: hidden;
+      box-shadow: 0 0 8px var(--border-glow) inset;
+    }
+
+    .toggle-track::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(135deg, var(--accent), var(--accent-2));
+      opacity: 0;
+      transition: opacity var(--transition);
+    }
+
+    input:checked ~ .toggle-track::before { opacity: 1; }
+
+    .toggle-thumb {
+      position: absolute;
+      top: 3px; left: 3px;
+      width: 22px; height: 22px;
+      border-radius: 50%;
+      background: var(--text-primary);
+      transition: transform var(--transition), background var(--transition);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 15px;
+      z-index: 1;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.3), 0 0 0 2px var(--accent-2) inset;
+      border: 1.5px solid var(--accent-2);
+    }
+
+    input:checked ~ .toggle-track .toggle-thumb {
+      transform: translateX(24px);
+    }
+
+    /* ── Glass card ── */
+    .card {
+      width: 100%;
+      max-width: 900px;
+      background: var(--surface);
+      backdrop-filter: blur(24px) saturate(160%);
+      -webkit-backdrop-filter: blur(24px) saturate(160%);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 32px;
+      box-shadow: var(--shadow), inset 0 1px 0 rgba(255,255,255,0.06);
+      transition: background var(--transition), border-color var(--transition), box-shadow var(--transition);
+      animation: fadeUp 0.7s cubic-bezier(0.4,0,0.2,1) 0.1s both;
+    }
+
+    [data-theme="light"] .card {
+      box-shadow: var(--shadow), inset 0 1px 0 rgba(255,255,255,0.8);
+    }
+
+    @keyframes fadeUp {
+      from { opacity: 0; transform: translateY(24px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
+    .card:hover {
+      border-color: var(--border-glow);
+      box-shadow: var(--shadow), 0 0 0 1px var(--border-glow), inset 0 1px 0 rgba(255,255,255,0.06);
+    }
+
+    /* ── Form elements ── */
+    .field { margin-bottom: 20px; }
+
+    label {
+      display: block;
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      color: var(--text-secondary);
+      margin-bottom: 8px;
+      transition: color var(--transition);
+    }
+
+    textarea, select, input[type="number"] {
+      width: 100%;
+      background: rgba(0,0,0,0.2);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      color: var(--text-primary);
+      font-family: 'DM Mono', monospace;
+      font-size: 14px;
+      padding: 12px 16px;
+      outline: none;
+      transition: border-color var(--transition), background var(--transition), box-shadow var(--transition);
+      resize: vertical;
+      appearance: none;
+    }
+
+    [data-theme="light"] textarea,
+    [data-theme="light"] select,
+    [data-theme="light"] input[type="number"] {
+      background: rgba(255,255,255,0.6);
+    }
+
+    textarea:focus, select:focus, input[type="number"]:focus {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px rgba(99,179,237,0.12), 0 0 20px rgba(99,179,237,0.08);
+    }
+
+    [data-theme="light"] textarea:focus,
+    [data-theme="light"] select:focus,
+    [data-theme="light"] input[type="number"]:focus {
+      box-shadow: 0 0 0 3px rgba(67,97,238,0.15);
+    }
+
+    textarea { min-height: 100px; }
+
+    .row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+
+    select option { background: var(--bg-2); color: var(--text-primary); }
+
+    /* ── Submit button ── */
+    .btn-submit {
+      width: 100%;
+      padding: 14px 24px;
+      border: none;
+      border-radius: 10px;
+      font-family: 'Syne', sans-serif;
+      font-size: 14px;
+      font-weight: 700;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      cursor: pointer;
+      position: relative;
+      overflow: hidden;
+      background: linear-gradient(135deg, var(--accent), var(--accent-2));
+      color: #fff;
+      transition: transform 0.2s, box-shadow 0.2s, opacity 0.2s;
+      box-shadow: 0 4px 20px rgba(99,179,237,0.25);
+    }
+
+    .btn-submit::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(135deg, rgba(255,255,255,0.15), transparent);
+      opacity: 0;
+      transition: opacity 0.2s;
+    }
+
+    .btn-submit:hover::before { opacity: 1; }
+    .btn-submit:hover { transform: translateY(-1px); box-shadow: 0 8px 30px rgba(99,179,237,0.35); }
+    .btn-submit:active { transform: translateY(0); }
+    .btn-submit:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+
+    /* Shimmer on button */
+    .btn-submit::after {
+      content: '';
+      position: absolute;
+      top: 0; left: -100%;
+      width: 60%;
+      height: 100%;
+      background: linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent);
+      transform: skewX(-20deg);
+      animation: shimmer 3s ease-in-out infinite;
+    }
+
+    @keyframes shimmer {
+      0%   { left: -100%; }
+      100% { left: 200%; }
+    }
+
+    /* ── Status section ── */
+    .status-card {
+      width: 100%;
+      max-width: 900px;
+      margin-top: 20px;
+      animation: fadeUp 0.5s cubic-bezier(0.4,0,0.2,1) both;
+    }
+
+    .status-banner {
+      background: var(--surface);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 20px 24px;
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      transition: border-color var(--transition);
+    }
+
+    .status-banner.pending  { border-color: rgba(236,201,75,0.3); }
+    .status-banner.processing { border-color: rgba(99,179,237,0.3); }
+    .status-banner.completed  { border-color: rgba(104,211,145,0.3); }
+    .status-banner.failed     { border-color: rgba(252,129,129,0.3); }
+
+    .status-dot {
+      width: 10px; height: 10px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+
+    .status-dot.pending    { background: #ecc94b; box-shadow: 0 0 8px rgba(236,201,75,0.6); animation: pulse 1.5s ease-in-out infinite; }
+    .status-dot.processing { background: var(--accent); box-shadow: 0 0 8px rgba(99,179,237,0.6); animation: pulse 1s ease-in-out infinite; }
+    .status-dot.completed  { background: var(--accent-3); box-shadow: 0 0 8px rgba(104,211,145,0.6); }
+    .status-dot.failed     { background: var(--danger); box-shadow: 0 0 8px rgba(252,129,129,0.6); }
+    .status-dot.cached     { background: var(--accent-2); box-shadow: 0 0 8px rgba(159,122,234,0.6); }
+
+    @keyframes pulse {
+      0%, 100% { transform: scale(1); opacity: 1; }
+      50%       { transform: scale(1.4); opacity: 0.7; }
+    }
+
+    .status-info { flex: 1; min-width: 0; }
+
+    .status-label {
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      color: var(--text-secondary);
+      margin-bottom: 4px;
+    }
+
+    .status-value {
+      font-family: 'DM Mono', monospace;
+      font-size: 13px;
+      color: var(--text-primary);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .cache-badge {
+      font-family: 'DM Mono', monospace;
+      font-size: 10px;
+      font-weight: 500;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      padding: 4px 10px;
+      border-radius: 20px;
+      background: rgba(159,122,234,0.15);
+      color: var(--accent-2);
+      border: 1px solid rgba(159,122,234,0.25);
+      white-space: nowrap;
+    }
+
+    /* ── Result box ── */
+    .result-box {
+      margin-top: 16px;
+      background: var(--surface);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      border: 1px solid var(--border-glow);
+      border-radius: var(--radius);
+      padding: 24px;
+      box-shadow: var(--shadow);
+      animation: expandIn 0.4s cubic-bezier(0.4,0,0.2,1) both;
+    }
+
+    @keyframes expandIn {
+      from { opacity: 0; transform: scaleY(0.9); transform-origin: top; }
+      to   { opacity: 1; transform: scaleY(1); }
+    }
+
+    .result-label {
+      font-size: 10px;
+      font-weight: 600;
+      letter-spacing: 3px;
+      text-transform: uppercase;
+      color: var(--accent-3);
+      margin-bottom: 12px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .result-label::after {
+      content: '';
+      flex: 1;
+      height: 1px;
+      background: linear-gradient(90deg, rgba(104,211,145,0.3), transparent);
+    }
+
+    .result-text {
+      font-family: 'DM Mono', monospace;
+      font-size: 13px;
+      line-height: 1.7;
+      color: var(--text-primary);
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+
+    /* ── Error box ── */
+    .error-box {
+      margin-top: 16px;
+      background: rgba(252,129,129,0.08);
+      border: 1px solid rgba(252,129,129,0.25);
+      border-radius: var(--radius);
+      padding: 16px 20px;
+      font-family: 'DM Mono', monospace;
+      font-size: 13px;
+      color: var(--danger);
+      animation: fadeUp 0.3s ease both;
+    }
+
+    /* ── Loading spinner ── */
+    .spinner {
+      width: 18px; height: 18px;
+      border: 2px solid rgba(99,179,237,0.2);
+      border-top-color: var(--accent);
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+      flex-shrink: 0;
+    }
+
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ── Divider ── */
+    .divider {
+      width: 100%;
+      max-width: 900px;
+      height: 1px;
+      background: linear-gradient(90deg, transparent, var(--border), transparent);
+      margin: 24px 0;
+    }
+  </style>
+</head>
+<body>
+  <div class="bg-canvas">
+    <div class="orb orb-1"></div>
+    <div class="orb orb-2"></div>
+    <div class="orb orb-3"></div>
+  </div>
+  <div class="bg-grid"></div>
+
+  <div class="page">
+    <header>
+      <div class="logo">
+        <span class="logo-title">Prompt Processing System</span>
+      </div>
+
+      <label class="theme-toggle" title="Toggle light/dark mode">
+        <input type="checkbox" id="themeToggle">
+        <div class="toggle-track">
+          <div class="toggle-thumb" id="toggleThumb">🌙</div>
+        </div>
+      </label>
+    </header>
+
+    <div class="card">
+      <div class="field">
+        <label for="prompt">Prompt</label>
+        <textarea id="prompt" rows="4" placeholder="Ask anything..." required maxlength="10000"></textarea>
+      </div>
+
+      <div class="row field">
+        <div>
+          <label for="priority">Priority</label>
+          <select id="priority">
+            <option value="normal">Normal</option>
+            <option value="high">High</option>
+          </select>
+        </div>
+        <div>
+          <label for="max_tokens">Max Tokens</label>
+          <input type="number" id="max_tokens" value="500" min="1" max="4096">
+        </div>
+      </div>
+
+      <button class="btn-submit" id="submitBtn" type="button">Submit Prompt</button>
+    </div>
+
+    <div class="status-card" id="statusCard" style="display:none;">
+      <div class="status-banner" id="statusBanner">
+        <div class="status-dot" id="statusDot"></div>
+        <div class="status-info">
+          <div class="status-label">Job ID</div>
+          <div class="status-value" id="jobIdText">—</div>
+        </div>
+        <div style="text-align:right; flex-shrink:0;">
+          <div class="status-label">Status</div>
+          <div class="status-value" id="statusText">—</div>
+        </div>
+        <span class="cache-badge" id="cacheBadge" style="display:none;">⚡ Cached</span>
+        <div class="spinner" id="spinner" style="display:none;"></div>
+      </div>
+
+      <div class="result-box" id="resultBox" style="display:none;">
+        <div class="result-label">Result</div>
+        <div class="result-text" id="resultText"></div>
+      </div>
+
+      <div class="error-box" id="errorBox" style="display:none;"></div>
+    </div>
+  </div>
+
+  <script>
+    const API_BASE = '/api/v1/prompts';
+    let jobId = null;
+    let pollInterval = null;
+
+    // ── Theme toggle ──
+    const html = document.documentElement;
+    const themeToggle = document.getElementById('themeToggle');
+    const toggleThumb = document.getElementById('toggleThumb');
+
+    const saved = localStorage.getItem('theme');
+    const defaultTheme = saved || 'light';
+    applyTheme(defaultTheme);
+
+    themeToggle.addEventListener('change', () => {
+      const next = html.dataset.theme === 'dark' ? 'light' : 'dark';
+      applyTheme(next);
+      localStorage.setItem('theme', next);
+    });
+
+    function applyTheme(theme) {
+      html.dataset.theme = theme;
+      themeToggle.checked = theme === 'dark';
+      toggleThumb.textContent = theme === 'dark' ? '🌙' : '☀️';
+    }
+
+    // ── Submit ──
+    document.getElementById('submitBtn').addEventListener('click', async () => {
+      clearInterval(pollInterval);
+      hide('statusCard');
+      hide('resultBox');
+      hide('errorBox');
+      hide('cacheBadge');
+      hide('spinner');
+
+      const prompt = document.getElementById('prompt').value.trim();
+      if (!prompt) return;
+
+      const priority  = document.getElementById('priority').value;
+      const max_tokens = parseInt(document.getElementById('max_tokens').value);
+      const btn = document.getElementById('submitBtn');
+
+      btn.disabled = true;
+      btn.textContent = 'Submitting…';
+
+      try {
+        const res = await fetch(API_BASE, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ prompt, priority, max_tokens }),
+        });
+
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({}));
+          throw new Error(err.detail || `HTTP ${res.status}`);
+        }
+
+        const data = await res.json();
+        jobId = data.job_id;
+
+        show('statusCard');
+        setStatus(data.status, jobId, data.cache_hit);
+
+        if (data.cache_hit && data.result) {
+          showResult(data.result);
+        } else if (jobId) {
+          show('spinner');
+          pollInterval = setInterval(checkStatus, 1500);
+        }
+      } catch (err) {
+        show('statusCard');
+        showError(err.message);
+      } finally {
+        btn.disabled = false;
+        btn.textContent = 'Submit Prompt';
+      }
+    });
+
+    async function checkStatus() {
+      if (!jobId) return;
+      try {
+        const res = await fetch(`${API_BASE}/${jobId}`);
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const data = await res.json();
+
+        setStatus(data.status, data.job_id, data.cache_hit);
+
+        if (data.status === 'completed') {
+          clearInterval(pollInterval);
+          hide('spinner');
+          showResult(data.result);
+        } else if (data.status === 'failed') {
+          clearInterval(pollInterval);
+          hide('spinner');
+          showError('Job failed on the server. Please try again.');
+        }
+      } catch (err) {
+        clearInterval(pollInterval);
+        hide('spinner');
+        showError(err.message);
+      }
+    }
+
+    function setStatus(status, id, cacheHit) {
+      const banner = document.getElementById('statusBanner');
+      const dot    = document.getElementById('statusDot');
+      const badge  = document.getElementById('cacheBadge');
+
+      document.getElementById('jobIdText').textContent  = id ? id.slice(0, 18) + '…' : '—';
+      document.getElementById('statusText').textContent = status.toUpperCase();
+
+      banner.className = `status-banner ${status}`;
+      dot.className    = `status-dot ${cacheHit ? 'cached' : status}`;
+
+      if (cacheHit) show('cacheBadge'); else hide('cacheBadge');
+    }
+
+    function showResult(text) {
+      document.getElementById('resultText').textContent = text || '';
+      show('resultBox');
+      hide('errorBox');
+    }
+
+    function showError(msg) {
+      document.getElementById('errorBox').textContent = '⚠ ' + msg;
+      show('errorBox');
+      hide('resultBox');
+    }
+
+    function show(id) { document.getElementById(id).style.display = ''; }
+    function hide(id) { document.getElementById(id).style.display = 'none'; }
+  </script>
+</body>
+</html>
