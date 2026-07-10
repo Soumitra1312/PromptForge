@@ -4,7 +4,10 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
     # MongoDB
-    DATABASE_URL: str
+    MONGO_DATABASE_URL: str = "mongodb://localhost:27017/promptdb"
+    
+    # PostgreSQL (for SQLAlchemy)
+    DATABASE_URL: str = "postgresql+asyncpg://postgres:postgres@localhost:5432/promptdb"
 
     # Groq
     GROQ_API_KEY: str = "test-key-for-ci"
