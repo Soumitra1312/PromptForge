@@ -7,7 +7,7 @@ pydantic==2.9.2
 pydantic-settings==2.5.2
 
 # Session middleware
-starlette==0.41.2
+starlette==0.38.0
 
 # Database
 motor==3.4.0
