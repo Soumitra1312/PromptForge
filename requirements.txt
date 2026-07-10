@@ -21,7 +21,7 @@ tenacity==9.0.0
 
 # Embeddings / Semantic Cache
 sentence-transformers==5.4.1
-torch==2.2.2
+torch==2.4.1
 numpy==1.26.4
 
 # Environment
