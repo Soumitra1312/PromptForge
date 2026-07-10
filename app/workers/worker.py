@@ -15,6 +15,7 @@ from datetime import datetime, timezone, timedelta
 from app.services.llm_client import LLMClient
 from app.services.semantic_cache import SemanticCache
 from app.services.rate_limiter import RateLimiter, RateLimitExceeded
+from app.db.database import get_db
 
 logging.basicConfig(
     level=logging.INFO,

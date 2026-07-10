@@ -18,6 +18,7 @@ import numpy as np
 from sentence_transformers import SentenceTransformer
 
 from app.db.mongo import db
+from app.db.database import get_db
 
 logger = logging.getLogger(__name__)
 

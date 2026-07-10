@@ -1,4 +1,5 @@
-from fastapi import APIRouter, Request
+from fastapi import APIRouter
+from app.db.database import get_db, Request
 from app.db.mongo import db
 
 router = APIRouter()
