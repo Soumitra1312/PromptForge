@@ -1,4 +1,6 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, Request
+
+from app.db.mongo import get_db
 
 router = APIRouter()
 
@@ -8,7 +10,6 @@ async def health_check(request: Request):
 
     status = {"status": "ok", "components": {}}
 
-    # Session-based queue info
     queue = request.session.get("job_queue", [])
     status["components"]["session_queue"] = {
         "status": "ok",
@@ -16,8 +17,8 @@ async def health_check(request: Request):
         "job_ids": queue,
     }
 
-    # MongoDB
     try:
+        db = get_db()
         pipeline = [
             {"$group": {"_id": "$status", "count": {"$sum": 1}}}
         ]
@@ -28,8 +29,6 @@ async def health_check(request: Request):
         status["components"]["mongo"] = {"status": "error", "detail": str(e)}
         status["status"] = "degraded"
 
-
-    # Active workers: not tracked in session mode
     status["components"]["workers"] = {
         "status": "n/a",
         "active_count": None,
