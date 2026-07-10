@@ -1,5 +1,5 @@
 import pytest
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock
 from app.config import settings
 
 
@@ -24,7 +24,6 @@ def mock_redis():
 @pytest.fixture
 async def client(mock_redis):
     """FastAPI test client."""
-    from fastapi.testclient import TestClient
     from httpx import AsyncClient
     from app.main import app
 

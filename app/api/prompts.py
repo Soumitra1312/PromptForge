@@ -5,7 +5,6 @@ from pydantic import BaseModel, Field
 from typing import Optional
 
 from app.db.mongo import db
-from app.db.database import get_db
 from app.services.semantic_cache import SemanticCache
 from app.services.rate_limiter import RateLimiter, RateLimitExceeded
 
