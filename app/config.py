@@ -7,7 +7,7 @@ class Settings(BaseSettings):
     DATABASE_URL: str
 
     # Groq
-    GROQ_API_KEY: str
+    GROQ_API_KEY: str = "test-key-for-ci"
     LLM_MODEL: str = "llama-3.3-70b-versatile" 
     
     # Session

@@ -8,6 +8,7 @@ pydantic-settings==2.5.2
 
 # Session middleware
 starlette==0.38.0
+itsdangerous==2.1.2
 
 # Database
 motor==3.4.0
