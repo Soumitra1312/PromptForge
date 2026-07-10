@@ -10,6 +10,7 @@ How it works:
 import logging
 import uuid
 import os
+import hashlib
 from datetime import datetime, timezone, timedelta
 from typing import Optional
 
@@ -72,6 +73,13 @@ def embed(text: str) -> list[float]:
 def cosine_similarity(a: list[float], b: list[float]) -> float:
     """Cosine similarity (dot product since normalized)."""
     return float(np.dot(np.array(a), np.array(b)))
+
+
+def prompt_hash(prompt: str) -> str:
+    """Generate a consistent hash for a prompt (case-insensitive)."""
+    normalized = prompt.lower().strip()
+    return hashlib.md5(normalized.encode()).hexdigest()
+
 
 # SEMANTIC CACHE
 

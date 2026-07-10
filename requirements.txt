@@ -13,6 +13,7 @@ itsdangerous==2.1.2
 # Database
 motor==3.4.0
 pymongo==4.7.2
+sqlalchemy[asyncio]==2.0.35
 
 # LLM & Retry
 httpx==0.27.2
