@@ -1,11 +1,31 @@
 # PromptForge
 
-A distributed async prompt processing system built for high-volume LLM inference.  
+⚡ Distributed async prompt processing system for high-volume LLM inference
+
+<div align="center" style="margin-bottom: 20px;">
+  <img src="https://cdn.jsdelivr.net/gh/devicons/devicon/icons/python/python-original.svg" height="40" />
+  <img src="https://img.shields.io/badge/FastAPI-009688?style=for-the-badge&logo=fastapi&logoColor=white" height="40" />
+  <img src="https://img.shields.io/badge/MongoDB-47A248?style=for-the-badge&logo=mongodb&logoColor=white" height="40" />
+  <img src="https://img.shields.io/badge/Groq-F55036?style=for-the-badge&logo=groq&logoColor=white" height="40" />
+  <img src="https://img.shields.io/badge/asyncio-3776AB?style=for-the-badge&logo=python&logoColor=white" height="40" />
+  <img src="https://img.shields.io/badge/pytest-0A9EDC?style=for-the-badge&logo=pytest&logoColor=white" height="40" />
+</div>
+
 Handles parallel processing, rate limiting, semantic caching, and crash recovery — all on MongoDB, no Redis required.
+
+## ⚡ Overview
+
+PromptForge is a distributed asynchronous prompt processing system designed for high-volume LLM inference. It enables scalable prompt execution through parallel workers while ensuring reliable processing with rate limiting, semantic caching, priority scheduling, and automatic crash recovery.
+
+The system consists of a FastAPI backend exposing REST APIs, a MongoDB-backed durable job queue, and multiple asynchronous worker processes that execute prompt jobs concurrently. Each worker processes up to 5 concurrent jobs using asyncio.Semaphore, while atomic MongoDB operations prevent duplicate job execution across workers.
+
+To reduce redundant LLM calls, PromptForge uses all-MiniLM-L6-v2 embeddings with cosine similarity–based semantic caching. A token bucket rate limiter supports 300 requests per minute, and an automated recovery mechanism detects jobs stuck for more than 5 minutes, re-queuing them for processing with up to 2 retry attempts before marking them as failed.
+
+PromptForge focuses on building reliable, production-ready AI infrastructure by combining distributed processing, intelligent caching, fault tolerance, and scalable REST APIs to efficiently manage high-throughput LLM workloads.
 
 ---
 
-## Screenshots
+## 📸 Screenshots
 
 | Screenshot 1 | Screenshot 2 |
 |---|---|
@@ -15,7 +35,7 @@ Handles parallel processing, rate limiting, semantic caching, and crash recovery
 
 ---
 
-## Architecture
+## 🏗️ Architecture
 
 ```
 Client → FastAPI (REST API)
@@ -43,7 +63,7 @@ Client → FastAPI (REST API)
 
 ---
 
-## Quick Start
+## 🚀 Quick Start
 
 ### 1. Clone the repository
 
@@ -115,7 +135,7 @@ curl http://localhost:8000/api/v1/health
 
 ---
 
-## API Reference
+## 📡 API Reference
 
 | Method | Endpoint | Description |
 |---|---|---|
@@ -153,7 +173,7 @@ pending → processing → completed
 
 ---
 
-## How It Works
+## ⚙️ How It Works
 
 ### Rate Limiting
 A token bucket is maintained per worker process (global shared dict) and per API session. The bucket refills at **5 tokens/second** (300/minute). If the bucket is empty, the worker re-queues the job and backs off — no requests are silently dropped.
@@ -176,7 +196,7 @@ Every 60 loop ticks, the worker scans for jobs stuck in `processing` for more th
 
 ---
 
-## Project Structure
+## 📁 Project Structure
 
 ```
 PromptForge/
@@ -208,7 +228,7 @@ PromptForge/
 
 ---
 
-## Environment Variables
+## 🔑 Environment Variables
 
 | Variable | Example | Description |
 |---|---|---|
@@ -221,7 +241,7 @@ PromptForge/
 
 ---
 
-## Running Tests
+## ✅ Running Tests
 
 ```bash
 pytest --cov=app -v
@@ -229,7 +249,7 @@ pytest --cov=app -v
 
 ---
 
-## Tech Stack
+## 🧰 Tech Stack
 
 | Layer | Technology |
 |---|---|
@@ -240,5 +260,3 @@ pytest --cov=app -v
 | Similarity Search | NumPy cosine similarity |
 | Retries | Tenacity |
 | HTTP Client | HTTPX |
- 
----
