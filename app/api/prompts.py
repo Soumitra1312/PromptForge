@@ -4,7 +4,7 @@ from datetime import datetime, timezone
 from pydantic import BaseModel, Field
 from typing import Optional
 
-from app.db.mongo import db
+from app.db.mongo import get_db
 from app.services.semantic_cache import SemanticCache
 from app.services.rate_limiter import RateLimiter, RateLimitExceeded
 
@@ -34,15 +34,14 @@ class JobStatus:
     CANCELLED = "cancelled"
 
 
-# Maps priority string to a numeric sort value stored in MongoDB
 PRIORITY_ORDER = {"high": 0, "normal": 1}
 
 
 @router.post("", response_model=PromptResponse, status_code=202)
 async def submit_prompt(request: Request, body: PromptRequest):
     """Submit a new prompt job. Returns immediately with a job_id."""
+    db = get_db()
 
-    # Rate limit: 300 requests/minute per session
     limiter = RateLimiter(request.session, max_tokens=300, refill_rate=5.0)
     try:
         await limiter.acquire()
@@ -51,9 +50,6 @@ async def submit_prompt(request: Request, body: PromptRequest):
 
     cache = SemanticCache(request.session)
 
-    # ✅ Only serve from cache for normal priority jobs.
-    # High priority jobs must always be processed fresh and stored in MongoDB
-    # so that polling GET /{job_id} can find them.
     if body.priority == "normal":
         cached_result = await cache.lookup(body.prompt)
         if cached_result:
@@ -65,27 +61,23 @@ async def submit_prompt(request: Request, body: PromptRequest):
                 position_in_queue=None,
             )
 
-    # Create job in MongoDB
     job_id = str(uuid.uuid4())
     job_doc = {
         "_id": job_id,
         "prompt": body.prompt,
         "status": JobStatus.PENDING,
         "priority": body.priority,
-        # ✅ Store numeric priority so MongoDB can sort efficiently
         "priority_order": PRIORITY_ORDER.get(body.priority, 1),
         "max_tokens": body.max_tokens,
         "cache_ttl_seconds": body.cache_ttl_seconds,
         "cache_hit": False,
         "result": None,
         "error_message": None,
-        # ✅ Use timezone-aware UTC timestamps throughout
         "created_at": datetime.now(timezone.utc),
         "updated_at": datetime.now(timezone.utc),
     }
     await db.jobs.insert_one(job_doc)
 
-    # Session-based queue: store job_id in session
     queue = request.session.get("job_queue", [])
     queue.append(job_id)
     request.session["job_queue"] = queue
@@ -102,6 +94,7 @@ async def submit_prompt(request: Request, body: PromptRequest):
 @router.get("/{job_id}", response_model=PromptResponse)
 async def get_job_status(job_id: str):
     """Poll job status."""
+    db = get_db()
     job = await db.jobs.find_one({"_id": job_id})
     if not job:
         raise HTTPException(status_code=404, detail="Job not found")
@@ -116,6 +109,7 @@ async def get_job_status(job_id: str):
 @router.get("/{job_id}/result")
 async def get_job_result(job_id: str):
     """Get the completed result for a job."""
+    db = get_db()
     job = await db.jobs.find_one({"_id": job_id})
     if not job:
         raise HTTPException(status_code=404, detail="Job not found")
@@ -129,6 +123,7 @@ async def get_job_result(job_id: str):
 @router.delete("/{job_id}", status_code=204)
 async def cancel_job(request: Request, job_id: str):
     """Cancel a pending job."""
+    db = get_db()
     job = await db.jobs.find_one({"_id": job_id})
     if not job:
         raise HTTPException(status_code=404, detail="Job not found")
@@ -136,7 +131,6 @@ async def cancel_job(request: Request, job_id: str):
         raise HTTPException(status_code=409, detail=f"Cannot cancel a {job['status']} job")
     await db.jobs.update_one({"_id": job_id}, {"$set": {"status": JobStatus.CANCELLED}})
 
-    # Remove from session-based queue
     queue = request.session.get("job_queue", [])
     if job_id in queue:
         queue.remove(job_id)

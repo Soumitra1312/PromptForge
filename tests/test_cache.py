@@ -32,64 +32,59 @@ def test_prompt_hash_case_insensitive():
     assert h1 == h2
 
 
-@pytest.fixture
-def mock_redis():
-    redis = AsyncMock()
-    redis.get = AsyncMock(return_value=None)
-    redis.setex = AsyncMock(return_value=True)
-    return redis
-
-
 @pytest.mark.asyncio
-async def test_lookup_exact_cache_hit(mock_redis):
-    """Exact hash hit in Redis → return without embedding call."""
-    mock_redis.get = AsyncMock(return_value="cached response")
-    cache = SemanticCache(mock_redis)
-    result = await cache.lookup("Hello world")
+async def test_lookup_returns_best_match_above_threshold():
+    """A cached embedding above the similarity threshold should be returned."""
+    with patch("app.services.semantic_cache.embed", return_value=[1.0, 0.0]), \
+         patch("app.services.semantic_cache.get_db") as mock_get_db:
+
+        mock_db = MagicMock()
+        mock_cursor = MagicMock()
+        mock_cursor.to_list = AsyncMock(return_value=[
+            {"embedding": [1.0, 0.0], "response_text": "cached response"}
+        ])
+        mock_db.cache_entries.find = MagicMock(return_value=mock_cursor)
+        mock_get_db.return_value = mock_db
+
+        cache = SemanticCache({})
+        result = await cache.lookup("Hello world")
+
     assert result == "cached response"
 
 
 @pytest.mark.asyncio
-async def test_lookup_cache_miss(mock_redis):
-    """No cache entry → return None (mocking DB with empty results)."""
-    mock_redis.get = AsyncMock(return_value=None)
-    cache = SemanticCache(mock_redis)
+async def test_lookup_cache_miss():
+    """No entries above threshold → return None."""
+    with patch("app.services.semantic_cache.embed", return_value=[1.0, 0.0]), \
+         patch("app.services.semantic_cache.get_db") as mock_get_db:
 
-    with patch("app.services.semantic_cache.get_db") as mock_db_ctx:
-        mock_db = AsyncMock()
-        mock_db.execute = AsyncMock(return_value=MagicMock(scalars=MagicMock(return_value=MagicMock(all=MagicMock(return_value=[])))))
-        mock_db_ctx.return_value.__aenter__ = AsyncMock(return_value=mock_db)
-        mock_db_ctx.return_value.__aexit__ = AsyncMock(return_value=False)
+        mock_db = MagicMock()
+        mock_cursor = MagicMock()
+        mock_cursor.to_list = AsyncMock(return_value=[])
+        mock_db.cache_entries.find = MagicMock(return_value=mock_cursor)
+        mock_get_db.return_value = mock_db
 
-        mock_openai = AsyncMock()
-        mock_openai.embeddings.create = AsyncMock(
-            return_value=MagicMock(data=[MagicMock(embedding=[0.1] * 1536)])
-        )
-        cache.openai = mock_openai
-
+        cache = SemanticCache({})
         result = await cache.lookup("some prompt with no match")
-        assert result is None
+
+    assert result is None
 
 
 @pytest.mark.asyncio
-async def test_store_caches_in_redis(mock_redis):
-    """store() should write to Redis with correct TTL."""
-    cache = SemanticCache(mock_redis)
+async def test_store_caches_in_mongo():
+    """store() should write an entry with prompt, response, and embedding."""
+    with patch("app.services.semantic_cache.embed", return_value=[1.0, 0.0]), \
+         patch("app.services.semantic_cache.get_db") as mock_get_db:
 
-    with patch("app.services.semantic_cache.get_db") as mock_db_ctx:
-        mock_db = AsyncMock()
-        mock_db_ctx.return_value.__aenter__ = AsyncMock(return_value=mock_db)
-        mock_db_ctx.return_value.__aexit__ = AsyncMock(return_value=False)
+        mock_db = MagicMock()
+        mock_db.cache_entries.insert_one = AsyncMock()
+        mock_get_db.return_value = mock_db
 
-        mock_openai = AsyncMock()
-        mock_openai.embeddings.create = AsyncMock(
-            return_value=MagicMock(data=[MagicMock(embedding=[0.1] * 1536)])
-        )
-        cache.openai = mock_openai
-
+        cache = SemanticCache({})
         await cache.store("my prompt", "my response", ttl_seconds=7200)
 
-    mock_redis.setex.assert_called_once()
-    args = mock_redis.setex.call_args[0]
-    assert args[1] == 7200
-    assert args[2] == "my response"
+    mock_db.cache_entries.insert_one.assert_called_once()
+    entry = mock_db.cache_entries.insert_one.call_args[0][0]
+    assert entry["prompt_text"] == "my prompt"
+    assert entry["response_text"] == "my response"
+    assert entry["embedding"] == [1.0, 0.0]

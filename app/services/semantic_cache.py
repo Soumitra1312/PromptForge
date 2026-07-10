@@ -17,30 +17,19 @@ from typing import Optional
 import numpy as np
 from sentence_transformers import SentenceTransformer
 
-from app.db.mongo import db
+from app.db.mongo import get_db
 
 logger = logging.getLogger(__name__)
 
-
-# MODEL CONFIG
-
 MODEL_NAME = "all-MiniLM-L6-v2"
-MODEL_PATH = "./models/all-MiniLM-L6-v2"  # optional local persistence
+MODEL_PATH = "./models/all-MiniLM-L6-v2"
 _model = None
 
 
 def get_model():
-    """
-    Lazy load the model.
-    - If already loaded → reuse
-    - If saved locally → load from disk
-    - Else → download and save
-    """
     global _model
-
     if _model is not None:
         return _model
-
     try:
         if os.path.exists(MODEL_PATH):
             logger.info("Loading model from local path...")
@@ -48,40 +37,31 @@ def get_model():
         else:
             logger.info("Model not found locally. Downloading...")
             _model = SentenceTransformer(MODEL_NAME)
-
-            # Save locally for future runs
             os.makedirs(os.path.dirname(MODEL_PATH), exist_ok=True)
             _model.save(MODEL_PATH)
             logger.info("Model downloaded and saved locally.")
-
     except Exception as e:
         logger.exception("Failed to load/download model: %s", e)
         raise
-
     return _model
 
-# EMBEDDING + SIMILARITY
 
 SIMILARITY_THRESHOLD = 0.92
 
+
 def embed(text: str) -> list[float]:
-    """Encode a prompt into a normalized embedding vector."""
     model = get_model()
     return model.encode(text.strip(), normalize_embeddings=True).tolist()
 
 
 def cosine_similarity(a: list[float], b: list[float]) -> float:
-    """Cosine similarity (dot product since normalized)."""
     return float(np.dot(np.array(a), np.array(b)))
 
 
 def prompt_hash(prompt: str) -> str:
-    """Generate a consistent hash for a prompt (case-insensitive)."""
     normalized = prompt.lower().strip()
     return hashlib.md5(normalized.encode()).hexdigest()
 
-
-# SEMANTIC CACHE
 
 class SemanticCache:
 
@@ -89,9 +69,6 @@ class SemanticCache:
         self.session = session
 
     async def lookup(self, prompt: str) -> Optional[str]:
-        """
-        Find most semantically similar cached response.
-        """
         try:
             query_vec = embed(prompt)
         except Exception as e:
@@ -99,6 +76,7 @@ class SemanticCache:
             return None
 
         try:
+            db = get_db()
             entries = await db.cache_entries.find(
                 {"expires_at": {"$gt": datetime.now(timezone.utc)}}
             ).to_list(length=500)
@@ -116,35 +94,22 @@ class SemanticCache:
             embedding = entry.get("embedding")
             if not embedding:
                 continue
-
             try:
                 score = cosine_similarity(query_vec, embedding)
             except Exception:
                 continue
-
             if score > best_score:
                 best_score = score
                 best_entry = entry
 
         if best_entry and best_score >= SIMILARITY_THRESHOLD:
-            logger.info(
-                "Semantic cache HIT (score=%.4f): %.50s...",
-                best_score,
-                prompt,
-            )
+            logger.info("Semantic cache HIT (score=%.4f): %.50s...", best_score, prompt)
             return best_entry["response_text"]
 
-        logger.info(
-            "Semantic cache MISS (best=%.4f < %.2f)",
-            best_score,
-            SIMILARITY_THRESHOLD,
-        )
+        logger.info("Semantic cache MISS (best=%.4f < %.2f)", best_score, SIMILARITY_THRESHOLD)
         return None
 
     async def store(self, prompt: str, response: str, ttl_seconds: int = 3600) -> None:
-        """
-        Store prompt + response with embedding.
-        """
         try:
             embedding = embed(prompt)
         except Exception as e:
@@ -152,7 +117,6 @@ class SemanticCache:
             return
 
         expires_at = datetime.now(timezone.utc) + timedelta(seconds=ttl_seconds)
-
         entry = {
             "_id": str(uuid.uuid4()),
             "prompt_text": prompt,
@@ -163,6 +127,7 @@ class SemanticCache:
         }
 
         try:
+            db = get_db()
             await db.cache_entries.insert_one(entry)
             logger.info("Stored semantic cache entry: %.50s...", prompt)
         except Exception as e:
